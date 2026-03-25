@@ -1,11 +1,13 @@
-from rest_framework import status, generics, permissions
+from rest_framework import status, generics, permissions, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 
+from .models import Account
 from .serializers import (
+    AccountSerializer,
     UserRegistrationSerializer,
     UserSerializer,
     UserUpdateSerializer,
@@ -15,6 +17,23 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+class AccountViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing wallet accounts.
+    Users can only access their own accounts.
+    """
+    serializer_class = AccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter accounts to only show the authenticated user's accounts."""
+        return Account.objects.filter(user=self.request.user).select_related('user')
+    
+    def perform_create(self, serializer):
+        """Automatically set the user to the authenticated user."""
+        serializer.save(user=self.request.user)
 
 
 class UserRegistrationView(generics.CreateAPIView):

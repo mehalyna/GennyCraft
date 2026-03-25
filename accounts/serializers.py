@@ -2,7 +2,22 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 
+from .models import Account
+
 User = get_user_model()
+
+
+class AccountSerializer(serializers.ModelSerializer):
+    """Serializer for wallet accounts."""
+    
+    class Meta:
+        model = Account
+        fields = (
+            'id', 'user', 'name', 'account_type', 'currency', 
+            'balance', 'description', 'is_active', 
+            'created_at', 'updated_at'
+        )
+        read_only_fields = ('id', 'user', 'balance', 'created_at', 'updated_at')
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):

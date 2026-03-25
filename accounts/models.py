@@ -92,3 +92,35 @@ class PasswordResetToken(models.Model):
 
     def __str__(self):
         return f'Reset token for {self.user.email}'
+
+
+class Account(models.Model):
+    """Wallet account for tracking balances."""
+    
+    ACCOUNT_TYPE_CHOICES = [
+        ('cash', 'Cash'),
+        ('bank', 'Bank Account'),
+        ('credit_card', 'Credit Card'),
+        ('savings', 'Savings'),
+        ('investment', 'Investment'),
+        ('other', 'Other'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accounts')
+    name = models.CharField(max_length=100)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='cash')
+    currency = models.CharField(max_length=3, default='USD')
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f'{self.user.email} - {self.name} ({self.currency})'

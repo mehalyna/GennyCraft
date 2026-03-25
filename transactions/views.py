@@ -1,10 +1,11 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import APIView, action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from django.http import HttpResponse
 from django.utils import timezone
 from django.conf import settings
+from django.db.models import QuerySet
 import csv
 
 from .models import Transaction
@@ -19,17 +20,17 @@ class TransactionViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.DjangoFilterBackend]
     filterset_class = TransactionFilter
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Transaction]: # type: ignore
         """Return only user's own non-deleted transactions."""
         return Transaction.objects.filter(
             owner=self.request.user,
             is_deleted=False
         ).select_related('category', 'owner')
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[TransactionSerializer]: # type: ignore
         """Use lighter serializer for list view."""
         if self.action == 'list':
-            return TransactionListSerializer
+            return TransactionListSerializer # type: ignore
         return TransactionSerializer
 
     def perform_destroy(self, instance):
@@ -116,3 +117,4 @@ class TransactionViewSet(viewsets.ModelViewSet):
             transaction.save()
 
         return Response({'detail': 'Attachment removed.'})
+
