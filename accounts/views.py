@@ -1,10 +1,14 @@
 from rest_framework import status, generics, permissions, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
+from django.db.models import Sum
+from django.utils import timezone
+from datetime import datetime, timedelta
 
+from transactions.models import Transaction
 from .models import Account
 from .serializers import (
     AccountSerializer,
@@ -34,6 +38,73 @@ class AccountViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Automatically set the user to the authenticated user."""
         serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['get'], url_path='wallet-summary')
+    def wallet_summary(self, request):
+        """
+        MyWallet: returns active accounts with balances and income/outcome totals
+        for the chosen period.
+
+        Query params:
+          start (YYYY-MM-DD) – period start date (defaults to first day of current month)
+          end   (YYYY-MM-DD) – period end date   (defaults to last day of current month)
+        """
+        user = request.user
+        start_param = request.query_params.get('start')
+        end_param = request.query_params.get('end')
+
+        # Determine date range, defaulting to the current calendar month
+        if bool(start_param) != bool(end_param):
+            return Response(
+                {'detail': 'Both start and end date must be provided together.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if start_param and end_param:
+            try:
+                start_naive = datetime.fromisoformat(start_param)
+                end_naive = datetime.fromisoformat(end_param)
+                start = timezone.make_aware(start_naive) if timezone.is_naive(start_naive) else start_naive
+                end = timezone.make_aware(end_naive) if timezone.is_naive(end_naive) else end_naive
+            except ValueError:
+                return Response(
+                    {'detail': 'Invalid date format. Use YYYY-MM-DD.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            now = timezone.now()
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end = (start + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+
+        # Aggregate income and outcome for the period (scoped to this user only)
+        transactions = Transaction.objects.filter(
+            owner=user,
+            is_deleted=False,
+            date__gte=start,
+            date__lte=end,
+        )
+
+        income = transactions.filter(type=Transaction.TYPE_INCOME).aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+
+        outcome = transactions.filter(type=Transaction.TYPE_EXPENSE).aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+
+        # Active accounts with their current balances
+        accounts = self.get_queryset().filter(is_active=True)
+
+        return Response({
+            'period': {
+                'start': start.date().isoformat(),
+                'end': end.date().isoformat(),
+            },
+            'accounts': AccountSerializer(accounts, many=True).data,
+            'income': float(income),
+            'outcome': float(outcome),
+            'net_change': float(income) - float(outcome),
+        })
 
 
 class UserRegistrationView(generics.CreateAPIView):
