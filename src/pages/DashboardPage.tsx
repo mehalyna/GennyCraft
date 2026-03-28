@@ -10,11 +10,10 @@ const DashboardPage: React.FC = () => {
   const [categoryBreakdown, setCategoryBreakdown] = useState<CategoryBreakdown | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [periodType, setPeriodType] = useState<'month' | 'year'>('month');
 
   useEffect(() => {
     loadDashboardData();
-  }, [periodType]);
+  }, []);
 
   const loadDashboardData = async (): Promise<void> => {
     setIsLoading(true);
