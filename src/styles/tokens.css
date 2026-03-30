@@ -1,0 +1,82 @@
+/**
+ * Design Tokens - MyWallet
+ * Extracted from Figma design
+ */
+
+:root {
+  /* Colors - Primary */
+  --color-primary-purple: #ad46ff;
+  --color-primary-pink: #f6339a;
+  --color-primary-gradient: linear-gradient(143.55deg, #ad46ff 0%, #f6339a 100%);
+
+  /* Colors - Neutral */
+  --color-white: #ffffff;
+  --color-black: #0a0a0a;
+  --color-gray-dark: #717182;
+  --color-gray-light: #ececf0;
+
+  /* Colors - Semantic */
+  --color-success: #00a63e;
+  --color-error: #f54900;
+
+  /* Colors - Functional */
+  --color-border: rgba(0, 0, 0, 0.1);
+  --color-overlay: rgba(255, 255, 255, 0.2);
+
+  /* Typography - Font Family */
+  --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Typography - Font Size */
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
+  --font-size-3xl: 36px;
+
+  /* Typography - Font Weight */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+
+  /* Typography - Line Height */
+  --line-height-xs: 16px;
+  --line-height-sm: 20px;
+  --line-height-lg: 27px;
+  --line-height-xl: 28px;
+  --line-height-2xl: 30px;
+  --line-height-3xl: 40px;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 36px;
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* Border Width */
+  --border-width: 0.8px;
+
+  /* Icon Sizes */
+  --icon-size-sm: 16px;
+  --icon-size-md: 20px;
+  --icon-size-lg: 24px;
+  --icon-size-xl: 40px;
+
+  /* Component Specific */
+  --card-padding: var(--spacing-lg);
+  --card-border: var(--border-width) solid var(--color-border);
+  --card-radius: var(--radius-lg);
+  
+  --button-padding: var(--spacing-sm);
+  --button-radius: var(--radius-sm);
+  
+  --header-height: 68.8px;
+}

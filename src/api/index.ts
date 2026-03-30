@@ -3,3 +3,4 @@ export { authApi } from './auth';
 export { categoriesApi } from './categories';
 export { transactionsApi } from './transactions';
 export { reportsApi } from './reports';
+export { accountsApi } from './accounts';
