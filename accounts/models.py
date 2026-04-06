@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.db.models import Sum, Q
 from django.utils.translation import gettext_lazy as _
 
 
@@ -110,7 +111,6 @@ class Account(models.Model):
     name = models.CharField(max_length=100)
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='cash')
     currency = models.CharField(max_length=3, default='USD')
-    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -124,3 +124,25 @@ class Account(models.Model):
     
     def __str__(self):
         return f'{self.user.email} - {self.name} ({self.currency})'
+    
+    @property
+    def balance(self):
+        """
+        Calculate balance dynamically from all non-deleted transactions.
+        This ensures the balance is always accurate and reflects the current state.
+        """
+        from decimal import Decimal
+        
+        # Get income total
+        income = self.transactions.filter(
+            type='income',
+            is_deleted=False
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        
+        # Get expense total
+        expense = self.transactions.filter(
+            type='expense',
+            is_deleted=False
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        
+        return income - expense

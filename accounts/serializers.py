@@ -9,6 +9,12 @@ User = get_user_model()
 
 class AccountSerializer(serializers.ModelSerializer):
     """Serializer for wallet accounts."""
+    balance = serializers.DecimalField(
+        max_digits=15, 
+        decimal_places=2, 
+        read_only=True,
+        help_text='Calculated from transactions'
+    )
     
     class Meta:
         model = Account

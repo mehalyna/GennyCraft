@@ -10,15 +10,27 @@ from .serializers import CategorySerializer
 class CategoryViewSet(viewsets.ModelViewSet):
     """ViewSet for Category CRUD operations."""
     serializer_class = CategorySerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        """Allow read-only access for unauthenticated users, auth required for modifications."""
+        if self.action in ['list', 'retrieve', 'income', 'expense']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         """Return global categories and user's own categories."""
-        user = self.request.user
-        return Category.objects.filter(
-            Q(owner=user) | Q(owner__isnull=True),
-            is_active=True
-        ).distinct()
+        if self.request.user.is_authenticated:
+            user = self.request.user
+            return Category.objects.filter(
+                Q(owner=user) | Q(owner__isnull=True),
+                is_active=True
+            ).distinct()
+        else:
+            # For unauthenticated users, only show global categories
+            return Category.objects.filter(
+                owner__isnull=True,
+                is_active=True
+            )
 
     def perform_destroy(self, instance):
         """Soft delete instead of hard delete."""

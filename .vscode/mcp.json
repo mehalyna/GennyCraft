@@ -4,28 +4,34 @@
       "type": "http",
       "url": "https://api.githubcopilot.com/mcp"
     },
+    "figma-local": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-developer-mcp",
+        "--figma-api-key=${input:figma_api_key}",
+        "--stdio"
+      ]
+    },
     "playwright": {
       "command": "npx",
-      "args": ["-y", "@microsoft/mcp-server-playwright"]
+      "args": [
+        "-y",
+        "@playwright/mcp"
+      ]
     },
-    "jira": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-atlassian"],
-      "env": {
-        "ATLASSIAN_URL": "${ATLASSIAN_URL}",
-        "ATLASSIAN_EMAIL": "${ATLASSIAN_EMAIL}",
-        "ATLASSIAN_API_TOKEN": "${ATLASSIAN_API_TOKEN}"
-      }
-    },
-    "azuredevops": {
-      "command": "npx",
-      "args": ["-y", "@azure/mcp-server-azuredevops"],
-      "env": {
-        "AZURE_DEVOPS_ORG_URL": "${AZURE_DEVOPS_ORG_URL}",
-        "AZURE_DEVOPS_PAT": "${AZURE_DEVOPS_PAT}",
-        "AZURE_DEVOPS_PROJECT": "${AZURE_DEVOPS_PROJECT}"
-      }
+    "gennycraft": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["gennycraft-mcp-wrapper.js"]
     }
-  }
-  
+  },
+  "inputs": [
+    {
+      "id": "figma_api_key",
+      "type": "promptString",
+      "description": "Figma API Key (Settings → Account → Personal access tokens)",
+      "password": true
+    }
+  ]
 }

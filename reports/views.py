@@ -1,11 +1,29 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
+from django.core.cache import cache
 from datetime import datetime, timedelta
+import hashlib
+import logging
 
 from transactions.models import Transaction
+
+logger = logging.getLogger(__name__)
+
+
+class ReportsRateThrottle(UserRateThrottle):
+    """Custom throttle for expensive report endpoints."""
+    scope = 'reports'
+
+
+def generate_cache_key(prefix, user_id, **params):
+    """Generate deterministic cache key from parameters."""
+    param_str = '&'.join(f'{k}={v}' for k, v in sorted(params.items()))
+    param_hash = hashlib.md5(param_str.encode()).hexdigest()
+    return f'{prefix}:{user_id}:{param_hash}'
 
 
 @api_view(['GET'])
@@ -27,30 +45,69 @@ def summary(request):
     else:
         start_date = datetime.fromisoformat(start_date)
         end_date = datetime.fromisoformat(end_date)
+    
+    # Check cache first
+    cache_key = generate_cache_key(
+        'summary',
+        user.id,
+        start=start_date.isoformat(),
+        end=end_date.isoformat()
+    )
+    
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        logger.info(f"Cache hit for summary: user={user.id}")
+        return Response(cached_result)
 
-    transactions = Transaction.objects.filter(
+    # Cache miss - compute from database
+    logger.info(f"Cache miss for summary: user={user.id}")
+    
+    # OPTIMIZED: Single query with conditional aggregation instead of 4 separate queries
+    from django.db.models import Case, When, DecimalField, IntegerField
+    
+    result_agg = Transaction.objects.filter(
         owner=user,
         is_deleted=False,
         date__gte=start_date,
         date__lte=end_date
+    ).aggregate(
+        income_total=Sum(
+            Case(
+                When(type=Transaction.TYPE_INCOME, then='amount'),
+                default=0,
+                output_field=DecimalField()
+            )
+        ),
+        expense_total=Sum(
+            Case(
+                When(type=Transaction.TYPE_EXPENSE, then='amount'),
+                default=0,
+                output_field=DecimalField()
+            )
+        ),
+        income_count=Sum(
+            Case(
+                When(type=Transaction.TYPE_INCOME, then=1),
+                default=0,
+                output_field=IntegerField()
+            )
+        ),
+        expense_count=Sum(
+            Case(
+                When(type=Transaction.TYPE_EXPENSE, then=1),
+                default=0,
+                output_field=IntegerField()
+            )
+        )
     )
 
-    # Calculate totals
-    income = transactions.filter(type=Transaction.TYPE_INCOME).aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-
-    expense = transactions.filter(type=Transaction.TYPE_EXPENSE).aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-
+    income = result_agg['income_total'] or 0
+    expense = result_agg['expense_total'] or 0
+    income_count = result_agg['income_count'] or 0
+    expense_count = result_agg['expense_count'] or 0
     balance = income - expense
 
-    # Count transactions
-    income_count = transactions.filter(type=Transaction.TYPE_INCOME).count()
-    expense_count = transactions.filter(type=Transaction.TYPE_EXPENSE).count()
-
-    return Response({
+    result = {
         'period': {
             'start': start_date.isoformat(),
             'end': end_date.isoformat(),
@@ -64,7 +121,12 @@ def summary(request):
             'count': expense_count,
         },
         'balance': float(balance),
-    })
+    }
+    
+    # Cache for 5 minutes (use reports cache)
+    cache.set(cache_key, result, timeout=300)
+    
+    return Response(result)
 
 
 @api_view(['GET'])
@@ -87,7 +149,23 @@ def category_breakdown(request):
     else:
         start_date = datetime.fromisoformat(start_date)
         end_date = datetime.fromisoformat(end_date)
+    
+    # Check cache first
+    cache_key = generate_cache_key(
+        'category_breakdown',
+        user.id,
+        start=start_date.isoformat(),
+        end=end_date.isoformat(),
+        type=trans_type
+    )
+    
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        logger.info(f"Cache hit for category_breakdown: user={user.id}")
+        return Response(cached_result)
 
+    # Cache miss - compute from database
+    logger.info(f"Cache miss for category_breakdown: user={user.id}")
     transactions = Transaction.objects.filter(
         owner=user,
         is_deleted=False,
@@ -98,6 +176,20 @@ def category_breakdown(request):
         total=Sum('amount'),
         count=Count('id')
     ).order_by('-total')
+    
+    result = {
+        'period': {
+            'start': start_date.isoformat(),
+            'end': end_date.isoformat(),
+        },
+        'type': trans_type,
+        'categories': list(transactions),
+    }
+    
+    # Cache for 10 minutes
+    cache.set(cache_key, result, timeout=600)
+    
+    return Response(result)
 
     return Response({
         'period': {
@@ -115,6 +207,8 @@ def trends(request):
     """
     Get transaction trends over time.
     Query params: period (daily|weekly|monthly), months (default 6)
+    
+    OPTIMIZED: Uses functional index on date_trunc for efficient monthly grouping.
     """
     user = request.user
     period = request.query_params.get('period', 'monthly')
@@ -123,22 +217,44 @@ def trends(request):
     end_date = timezone.now()
     start_date = end_date - timedelta(days=30 * months)
 
-    transactions = Transaction.objects.filter(
+    # OPTIMIZED: Single query with conditional aggregation by month
+    from django.db.models.functions import TruncMonth
+    from django.db.models import Case, When, DecimalField
+    
+    monthly_data = Transaction.objects.filter(
         owner=user,
         is_deleted=False,
         date__gte=start_date,
         date__lte=end_date
-    )
-
-    # TODO: Implement proper grouping by period
-    # For now, return monthly aggregates
-    from django.db.models.functions import TruncMonth
-
-    monthly_data = transactions.annotate(
+    ).annotate(
         month=TruncMonth('date')
-    ).values('month', 'type').annotate(
-        total=Sum('amount'),
-        count=Count('id')
+    ).values('month').annotate(
+        income_total=Sum(
+            Case(
+                When(type=Transaction.TYPE_INCOME, then='amount'),
+                default=0,
+                output_field=DecimalField()
+            )
+        ),
+        expense_total=Sum(
+            Case(
+                When(type=Transaction.TYPE_EXPENSE, then='amount'),
+                default=0,
+                output_field=DecimalField()
+            )
+        ),
+        income_count=Count(
+            Case(
+                When(type=Transaction.TYPE_INCOME, then=1),
+                default=None
+            )
+        ),
+        expense_count=Count(
+            Case(
+                When(type=Transaction.TYPE_EXPENSE, then=1),
+                default=None
+            )
+        )
     ).order_by('month')
 
     return Response({
@@ -155,24 +271,41 @@ def dashboard(request):
     """Get dashboard data with current balance and recent transactions."""
     user = request.user
 
-    # Calculate all-time balance
-    all_transactions = Transaction.objects.filter(
+    # OPTIMIZED: Single query with conditional aggregation
+    from django.db.models import Case, When, DecimalField
+    
+    balance_agg = Transaction.objects.filter(
         owner=user,
         is_deleted=False
+    ).aggregate(
+        income_total=Sum(
+            Case(
+                When(type=Transaction.TYPE_INCOME, then='amount'),
+                default=0,
+                output_field=DecimalField()
+            )
+        ),
+        expense_total=Sum(
+            Case(
+                When(type=Transaction.TYPE_EXPENSE, then='amount'),
+                default=0,
+                output_field=DecimalField()
+            )
+        )
     )
 
-    income = all_transactions.filter(type=Transaction.TYPE_INCOME).aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-
-    expense = all_transactions.filter(type=Transaction.TYPE_EXPENSE).aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-
+    income = balance_agg['income_total'] or 0
+    expense = balance_agg['expense_total'] or 0
     current_balance = income - expense
 
-    # Recent transactions
-    recent = all_transactions.select_related('category').order_by('-date')[:10]
+    # Recent transactions - use only() to fetch minimal fields
+    recent = Transaction.objects.filter(
+        owner=user,
+        is_deleted=False
+    ).select_related('category').only(
+        'id', 'type', 'amount', 'date', 'title',
+        'category__name'
+    ).order_by('-date')[:10]
 
     return Response({
         'current_balance': float(current_balance),

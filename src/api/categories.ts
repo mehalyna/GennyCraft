@@ -4,8 +4,8 @@ import { Category, CategoryCreate } from '../types';
 export const categoriesApi = {
   // Get all categories (global + user's own)
   getAll: async (): Promise<Category[]> => {
-    const response = await apiClient.get<Category[]>('/categories/');
-    return response.data;
+    const response = await apiClient.get<{ results: Category[] }>('/categories/');
+    return response.data.results || [];
   },
 
   // Get single category
@@ -34,12 +34,12 @@ export const categoriesApi = {
   // Get income categories
   getIncomeCategories: async (): Promise<Category[]> => {
     const response = await apiClient.get<Category[]>('/categories/income/');
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   // Get expense categories
   getExpenseCategories: async (): Promise<Category[]> => {
     const response = await apiClient.get<Category[]>('/categories/expense/');
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
 };

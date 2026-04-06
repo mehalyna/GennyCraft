@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": ".github/hooks/scripts/audit-session-start.sh",
+        "powershell": ".github/hooks/scripts/audit-session-start.ps1"
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": ".github/hooks/scripts/audit-prompt.sh",
+        "powershell": ".github/hooks/scripts/audit-prompt.ps1"
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": ".github/hooks/scripts/audit-tool.sh",
+        "powershell": ".github/hooks/scripts/audit-tool.ps1"
+      }
+    ]
+  }
+}

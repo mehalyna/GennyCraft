@@ -20,8 +20,9 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 
-    # Health check
-    path('health/', include('home_wallet.health')),
+    # Health check and metrics
+    path('api/health/', include('home_wallet.health')),
+    path('metrics/', include([path('', __import__('home_wallet.views', fromlist=['metrics_view']).metrics_view, name='metrics')])),
 ]
 
 # Serve media files in development
