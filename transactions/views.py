@@ -5,7 +5,7 @@ from django_filters import rest_framework as filters
 from django.http import HttpResponse
 from django.utils import timezone
 from django.conf import settings
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Q
 import csv
 
 from .models import Transaction
@@ -21,11 +21,22 @@ class TransactionViewSet(viewsets.ModelViewSet):
     filterset_class = TransactionFilter
 
     def get_queryset(self) -> QuerySet[Transaction]: # type: ignore
-        """Return only user's own non-deleted transactions."""
-        return Transaction.objects.filter(
+        """Return only user's own non-deleted transactions with optimized joins."""
+        queryset = Transaction.objects.filter(
             owner=self.request.user,
             is_deleted=False
-        ).select_related('category', 'owner')
+        ).select_related('category', 'owner', 'account')
+        
+        # For list views, only fetch necessary fields to reduce data transfer
+        if self.action == 'list':
+            queryset = queryset.only(
+                'id', 'type', 'amount', 'currency', 'date', 'title',
+                'is_recurring', 'created_at',
+                'category__name', 'category__icon',
+                'account__name'
+            )
+        
+        return queryset
 
     def get_serializer_class(self) -> type[TransactionSerializer]: # type: ignore
         """Use lighter serializer for list view."""
@@ -40,30 +51,52 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def export(self, request):
-        """Export transactions to CSV."""
-        transactions = self.filter_queryset(self.get_queryset())
-
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = f'attachment; filename="transactions_{timezone.now().strftime("%Y%m%d")}.csv"'
-
-        writer = csv.writer(response)
-        writer.writerow([
-            'Date', 'Type', 'Amount', 'Currency', 'Category',
-            'Title', 'Note', 'Created At'
-        ])
-
-        for transaction in transactions:
-            writer.writerow([
-                transaction.date.strftime('%Y-%m-%d %H:%M:%S'),
-                transaction.type,
-                str(transaction.amount),
-                transaction.currency,
-                transaction.category.name,
-                transaction.title,
-                transaction.note,
-                transaction.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        """
+        Export transactions to CSV using streaming to handle large datasets.
+        Prevents memory exhaustion for users with many transactions.
+        """
+        import csv
+        from django.http import StreamingHttpResponse
+        
+        class Echo:
+            """Echo object that writes to a pseudo-file."""
+            def write(self, value):
+                return value
+        
+        def iter_transactions():
+            """Generator to yield CSV rows."""
+            pseudo_buffer = Echo()
+            writer = csv.writer(pseudo_buffer)
+            
+            # Header row
+            yield writer.writerow([
+                'Date', 'Type', 'Amount', 'Currency', 'Category',
+                'Title', 'Note', 'Created At'
             ])
-
+            
+            # Data rows - iterate in chunks
+            queryset = self.filter_queryset(self.get_queryset())
+            queryset = queryset.select_related('category').iterator(chunk_size=500)
+            
+            for transaction in queryset:
+                yield writer.writerow([
+                    transaction.date.strftime('%Y-%m-%d %H:%M:%S'),
+                    transaction.type,
+                    str(transaction.amount),
+                    transaction.currency,
+                    transaction.category.name,
+                    transaction.title,
+                    transaction.note,
+                    transaction.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                ])
+        
+        response = StreamingHttpResponse(
+            iter_transactions(),
+            content_type='text/csv',
+        )
+        response['Content-Disposition'] = \
+            f'attachment; filename="transactions_{timezone.now().strftime("%Y%m%d")}.csv"'
+        
         return response
 
     @action(detail=False, methods=['post'])

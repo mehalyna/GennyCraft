@@ -27,6 +27,12 @@ class Transaction(models.Model):
         on_delete=models.CASCADE,
         related_name='transactions'
     )
+    account = models.ForeignKey(
+        'accounts.Account',
+        on_delete=models.CASCADE,
+        related_name='transactions',
+        help_text='The account this transaction belongs to'
+    )
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     amount = models.DecimalField(
         max_digits=12,
@@ -66,6 +72,8 @@ class Transaction(models.Model):
             models.Index(fields=['owner', 'type']),
             models.Index(fields=['owner', 'category']),
             models.Index(fields=['owner', 'is_deleted']),
+            models.Index(fields=['account', 'is_deleted']),
+            models.Index(fields=['account', 'date']),
         ]
 
     def __str__(self):

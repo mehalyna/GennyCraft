@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { BalanceCard } from './BalanceCard';
+import BalanceCard from './BalanceCard';
 
 // Example: Simple usage with static data
 export const BasicExample = () => (

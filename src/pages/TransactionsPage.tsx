@@ -43,10 +43,12 @@ const TransactionsPage: React.FC = () => {
       ]);
 
       setTransactions(transactionsResponse.results);
-      setCategories(categoriesData);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
     } catch (err) {
       console.error('Failed to load data:', err);
       setError('Failed to load transactions');
+      setCategories([]);
+      setTransactions([]);
     } finally {
       setIsLoading(false);
     }

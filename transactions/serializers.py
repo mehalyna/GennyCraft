@@ -11,11 +11,12 @@ from categories.serializers import CategorySerializer
 class TransactionSerializer(serializers.ModelSerializer):
     """Serializer for Transaction model."""
     category_details = CategorySerializer(source='category', read_only=True)
+    account_name = serializers.CharField(source='account.name', read_only=True)
 
     class Meta:
         model = Transaction
         fields = (
-            'id', 'type', 'amount', 'currency', 'date',
+            'id', 'account', 'account_name', 'type', 'amount', 'currency', 'date',
             'category', 'category_details', 'title', 'note',
             'attachment', 'is_recurring', 'recurring_rule',
             'is_deleted', 'created_at', 'updated_at'
@@ -37,13 +38,21 @@ class TransactionSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """Validate category matches transaction type."""
+        """Validate category matches transaction type and account belongs to user."""
+        user = self.context['request'].user
+        
+        # Validate account ownership
+        if 'account' in attrs:
+            account = attrs['account']
+            if account.user != user:
+                raise serializers.ValidationError({'account': 'Invalid account.'})
+        
+        # Validate category
         if 'category' in attrs and 'type' in attrs:
             category = attrs['category']
             trans_type = attrs['type']
 
             # Check if category belongs to user or is global
-            user = self.context['request'].user
             if category.owner and category.owner != user:
                 raise serializers.ValidationError({'category': 'Invalid category.'})
 
@@ -68,11 +77,12 @@ class TransactionListSerializer(serializers.ModelSerializer):
     """Lighter serializer for list view."""
     category_name = serializers.CharField(source='category.name', read_only=True)
     category_icon = serializers.CharField(source='category.icon', read_only=True)
+    account_name = serializers.CharField(source='account.name', read_only=True)
 
     class Meta:
         model = Transaction
         fields = (
-            'id', 'type', 'amount', 'currency', 'date',
+            'id', 'account', 'account_name', 'type', 'amount', 'currency', 'date',
             'category_name', 'category_icon', 'title',
             'created_at'
         )

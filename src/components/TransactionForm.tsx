@@ -34,7 +34,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   const loadCategories = async (): Promise<void> => {
     try {
       const allCategories = await categoriesApi.getAll();
-      const filtered = allCategories.filter(
+      const categoriesArray = Array.isArray(allCategories) ? allCategories : [];
+      const filtered = categoriesArray.filter(
         (cat) => cat.type === formData.type || cat.type === 'both'
       );
       setCategories(filtered);
@@ -46,6 +47,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
     } catch (err) {
       console.error('Failed to load categories:', err);
       setError('Failed to load categories');
+      setCategories([]);
     }
   };
 

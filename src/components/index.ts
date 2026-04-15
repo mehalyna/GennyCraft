@@ -1,5 +1,6 @@
 export { default as AddCardButton } from './AddCardButton';
 export { default as BalanceCard } from './BalanceCard';
+export { default as CashbackCard } from './CashbackCard';
 export { default as Layout } from './Layout';
 export { default as PrivateRoute } from './PrivateRoute';
 export { default as QuickActionButton } from './QuickActionButton';
